@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Soft circular background -->
+  <circle cx="32" cy="32" r="30" fill="#4F46E5"/>
+  
+  <!-- Simplified globe -->
+  <circle cx="32" cy="32" r="18" fill="none" stroke="#FFFFFF" stroke-width="2.5"/>
+  <!-- Longitude lines -->
+  <ellipse cx="32" cy="32" rx="8" ry="18" fill="none" stroke="#FFFFFF" stroke-width="1.8"/>
+  <line x1="14" y1="32" x2="50" y2="32" stroke="#FFFFFF" stroke-width="1.8"/>
+  <!-- Latitude lines -->
+  <path d="M16 24 Q32 20 48 24" fill="none" stroke="#FFFFFF" stroke-width="1.5"/>
+  <path d="M16 40 Q32 44 48 40" fill="none" stroke="#FFFFFF" stroke-width="1.5"/>
+  
+  <!-- Small game controller silhouette overlaid at bottom-right of globe -->
+  <g transform="translate(38, 38) scale(0.55)">
+    <!-- Controller body -->
+    <rect x="0" y="4" width="22" height="14" rx="4" ry="4" fill="#FFFFFF"/>
+    <!-- D-pad -->
+    <rect x="3" y="8" width="6" height="2" rx="0.5" fill="#4F46E5"/>
+    <rect x="5" y="6" width="2" height="6" rx="0.5" fill="#4F46E5"/>
+    <!-- Buttons -->
+    <circle cx="16" cy="9" r="1.6" fill="#4F46E5"/>
+    <circle cx="19.5" cy="12" r="1.6" fill="#4F46E5"/>
+  </g>
+</svg>

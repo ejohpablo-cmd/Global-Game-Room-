@@ -1,0 +1,1195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
+<title>Global Game Room</title>
+<meta name="description" content="Turn the group chat into game night. Play trivia, challenges and more with friends worldwide."/>
+<meta property="og:title" content="Global Game Room"/>
+<meta property="og:description" content="Turn the group chat into game night. No account needed."/>
+<meta property="og:type" content="website"/>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌍</text></svg>"/>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:16px;-webkit-text-size-adjust:100%}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:linear-gradient(160deg,#eef2ff 0%,#f0f9ff 50%,#fdf4ff 100%);color:#1e293b;min-height:100dvh;line-height:1.5;overflow-x:hidden}
+button,input,select{font:inherit}button{cursor:pointer;border:none;background:none}
+:focus-visible{outline:3px solid #818cf8;outline-offset:2px}
+.app{max-width:480px;margin:0 auto;min-height:100dvh;display:flex;flex-direction:column;position:relative}
+.screen{display:none;flex:1;flex-direction:column;padding:1.25rem 1.25rem 2rem;animation:fadeIn .25s ease}
+.screen.active{display:flex}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.top-bar{display:flex;align-items:center;justify-content:space-between;padding:.75rem 1.25rem;background:rgba(255,255,255,.85);backdrop-filter:blur(12px);border-bottom:1px solid rgba(148,163,184,.2);position:sticky;top:0;z-index:50}
+.logo{font-weight:800;font-size:1.15rem;letter-spacing:-.02em;color:#4f46e5;display:flex;align-items:center;gap:.4rem}
+.logo span{color:#1e293b}
+.room-code-pill{background:#e0e7ff;color:#4338ca;font-weight:700;font-size:.85rem;padding:.3rem .7rem;border-radius:999px;letter-spacing:.05em}
+.connection-dot{width:10px;height:10px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,.25);transition:background .3s}
+.connection-dot.offline{background:#ef4444;box-shadow:0 0 0 3px rgba(239,68,68,.25)}
+.card{background:#fff;border-radius:1.25rem;padding:1.5rem;box-shadow:0 4px 20px rgba(79,70,229,.08),0 1px 3px rgba(0,0,0,.04);margin-bottom:1rem}
+.btn{display:flex;align-items:center;justify-content:center;gap:.5rem;width:100%;padding:1rem 1.25rem;border-radius:1rem;font-weight:700;font-size:1.05rem;transition:transform .15s,box-shadow .15s;user-select:none}
+.btn:active{transform:scale(.97)}
+.btn-primary{background:linear-gradient(135deg,#4f46e5,#6366f1);color:#fff;box-shadow:0 4px 14px rgba(79,70,229,.35)}
+.btn-secondary{background:#f1f5f9;color:#334155}
+.btn-outline{background:transparent;border:2px solid #c7d2fe;color:#4f46e5}
+.btn-sm{padding:.6rem 1rem;font-size:.9rem;border-radius:.75rem;width:auto}
+.btn:disabled{opacity:.55;pointer-events:none}
+.form-group{margin-bottom:1.25rem}
+.form-group label{display:block;font-weight:600;font-size:.9rem;margin-bottom:.4rem;color:#475569}
+.input,.select{width:100%;padding:.9rem 1rem;border:2px solid #e2e8f0;border-radius:.9rem;background:#f8fafc;font-size:1rem}
+.input:focus,.select:focus{border-color:#818cf8;background:#fff;outline:none}
+.country-search-wrap{position:relative}
+.country-dropdown{position:absolute;top:100%;left:0;right:0;max-height:220px;overflow-y:auto;background:#fff;border:2px solid #e2e8f0;border-radius:.9rem;margin-top:.35rem;z-index:20;display:none;box-shadow:0 10px 25px rgba(0,0,0,.08)}
+.country-dropdown.open{display:block}
+.country-option{padding:.7rem 1rem;display:flex;align-items:center;gap:.6rem;cursor:pointer}
+.country-option:hover,.country-option:focus{background:#eef2ff}
+.landing-hero{text-align:center;padding:2rem 0 1.5rem}
+.landing-hero h1{font-size:2.1rem;font-weight:800;letter-spacing:-.03em;line-height:1.15;margin-bottom:.75rem}
+.landing-hero h1 span{color:#4f46e5}
+.landing-hero p{font-size:1.15rem;color:#64748b;margin-bottom:2rem}
+.hero-actions{display:flex;flex-direction:column;gap:.85rem;margin-bottom:2rem}
+.feature-row{display:flex;justify-content:center;gap:1.5rem;font-size:.95rem;color:#475569;margin-bottom:2rem}
+.games-preview{display:grid;grid-template-columns:repeat(4,1fr);gap:.6rem;text-align:center}
+.game-preview-item{background:#fff;border-radius:1rem;padding:.85rem .4rem;font-size:.75rem;font-weight:600;color:#475569;box-shadow:0 2px 8px rgba(0,0,0,.04)}
+.game-preview-item .icon{font-size:1.5rem;margin-bottom:.3rem}
+.lobby-header{text-align:center;margin-bottom:1.5rem}
+.lobby-code{font-size:2.4rem;font-weight:800;letter-spacing:.12em;color:#4f46e5;margin:.5rem 0}
+.player-list{display:flex;flex-direction:column;gap:.6rem;margin-bottom:1.5rem}
+.player-row{display:flex;align-items:center;gap:.75rem;background:#fff;padding:.85rem 1rem;border-radius:1rem;box-shadow:0 2px 8px rgba(0,0,0,.04);transition:opacity .2s}
+.player-row.answered{border-left:4px solid #22c55e}
+.player-avatar{width:42px;height:42px;border-radius:50%;background:#e0e7ff;display:flex;align-items:center;justify-content:center;font-size:1.4rem;flex-shrink:0}
+.player-info{flex:1;min-width:0}
+.player-name{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.player-country{font-size:.85rem;color:#64748b}
+.host-badge{background:#4f46e5;color:#fff;font-size:.7rem;font-weight:700;padding:.2rem .5rem;border-radius:999px}
+.answered-badge{background:#22c55e;color:#fff;font-size:.7rem;font-weight:700;padding:.2rem .5rem;border-radius:999px;margin-left:.3rem}
+.waiting-text{text-align:center;color:#64748b;font-size:.95rem;margin-bottom:1.25rem}
+.hidden{display:none!important}.text-center{text-align:center}.mt-1{margin-top:.5rem}.mt-2{margin-top:1rem}.mb-1{margin-bottom:.5rem}.mb-2{margin-bottom:1rem}.flex{display:flex}.gap-1{gap:.5rem}
+.toast{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%) translateY(20px);background:#1e293b;color:#fff;padding:.85rem 1.4rem;border-radius:999px;font-weight:600;font-size:.9rem;opacity:0;transition:all .3s;z-index:100;pointer-events:none;max-width:90%;text-align:center}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.loading-overlay{position:fixed;inset:0;background:rgba(255,255,255,.75);display:flex;align-items:center;justify-content:center;z-index:90;backdrop-filter:blur(4px)}
+.spinner{width:40px;height:40px;border:4px solid #e0e7ff;border-top-color:#4f46e5;border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.game-grid{display:grid;grid-template-columns:1fr 1fr;gap:.85rem;margin-bottom:1.5rem}
+.game-card{background:#fff;border-radius:1.25rem;padding:1.25rem .75rem;text-align:center;box-shadow:0 4px 14px rgba(79,70,229,.08);cursor:pointer;transition:transform .15s;border:2px solid transparent;user-select:none}
+.game-card:active{transform:scale(.96)}
+.game-card .game-icon{font-size:2.2rem;margin-bottom:.4rem}
+.game-card .game-title{font-weight:800;font-size:.95rem;margin-bottom:.25rem;color:#1e293b}
+.game-card .game-desc{font-size:.75rem;color:#64748b;line-height:1.3}
+.game-card.selected{border-color:#4f46e5;box-shadow:0 0 0 3px rgba(79,70,229,.2)}
+.game-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;font-size:.9rem;font-weight:600;color:#64748b}
+.game-room-code{background:#e0e7ff;color:#4338ca;padding:.25rem .7rem;border-radius:999px;font-weight:700;letter-spacing:.05em}
+.game-title{text-align:center;font-size:1.4rem;font-weight:800;margin-bottom:1.25rem;color:#4f46e5}
+.question-card{background:#fff;border-radius:1.25rem;padding:1.5rem;margin-bottom:1.25rem;box-shadow:0 4px 18px rgba(79,70,229,.08);font-size:1.15rem;font-weight:600;line-height:1.45;text-align:center}
+.timer-bar{position:relative;height:12px;background:#e2e8f0;border-radius:999px;margin-bottom:1.5rem;overflow:hidden}
+.timer-fill{height:100%;background:linear-gradient(90deg,#4f46e5,#818cf8);width:100%;transition:width 1s linear}
+.timer-text{position:absolute;right:0;top:-1.6rem;font-weight:700;font-size:.95rem;color:#4f46e5}
+.answer-btn{display:block;width:100%;padding:1rem;margin-bottom:.7rem;background:#fff;border:2px solid #e2e8f0;border-radius:1rem;font-weight:600;font-size:1rem;text-align:left;transition:all .15s}
+.answer-btn:active,.answer-btn.selected{border-color:#4f46e5;background:#eef2ff}
+.game-score{text-align:center;font-weight:700;color:#475569;margin-top:1rem}
+.leaderboard{display:flex;flex-direction:column;gap:.6rem;margin-bottom:1.5rem}
+.leaderboard-row{display:flex;align-items:center;gap:.75rem;background:#fff;padding:.85rem 1rem;border-radius:1rem;box-shadow:0 2px 8px rgba(0,0,0,.04)}
+.leaderboard-rank{font-weight:800;font-size:1.1rem;width:28px;color:#4f46e5}
+.leaderboard-name{flex:1;font-weight:700}
+.leaderboard-score{font-weight:800;color:#4f46e5}
+.reactions{display:flex;justify-content:center;gap:.6rem;margin:1rem 0;flex-wrap:wrap}
+.reaction-btn{font-size:1.6rem;padding:.4rem .7rem;border-radius:999px;background:#f1f5f9;transition:transform .15s}
+.reaction-btn:active{transform:scale(1.2)}
+.sound-toggle{position:fixed;bottom:1rem;right:1rem;width:44px;height:44px;border-radius:50%;background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.1);display:flex;align-items:center;justify-content:center;font-size:1.2rem;z-index:60;border:2px solid #e2e8f0}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+<header class="top-bar hidden" id="topBar">
+<div class="logo">GGR <span>Game Room</span></div>
+<div class="room-code-pill hidden" id="topRoomCode"></div>
+<div class="connection-dot" id="connectionDot" title="Connected"></div>
+</header>
+
+<section class="screen active" id="screenLanding">
+<div class="landing-hero">
+<h1>GLOBAL<br><span>GAME ROOM</span></h1>
+<p>Turn the group chat<br>into game night.</p>
+<div class="hero-actions">
+<button class="btn btn-primary" id="btnGoCreate">CREATE ROOM</button>
+<button class="btn btn-secondary" id="btnGoJoin">JOIN ROOM</button>
+</div>
+<div class="feature-row"><span>🌍 Play with anyone</span><span>⚡ No account required</span></div>
+</div>
+<div class="card">
+<p class="text-center mb-2" style="font-weight:700;color:#475569">PLAY TOGETHER</p>
+<p class="text-center mb-2" style="font-size:.9rem;color:#64748b">Trivia • Challenges • Guessing • Chaos</p>
+<div class="games-preview">
+<div class="game-preview-item"><div class="icon">🌍</div>Country</div>
+<div class="game-preview-item"><div class="icon">🧠</div>Trivia</div>
+<div class="game-preview-item"><div class="icon">😂</div>Rather</div>
+<div class="game-preview-item"><div class="icon">🎭</div>Emoji</div>
+<div class="game-preview-item"><div class="icon">🎲</div>Challenge</div>
+<div class="game-preview-item"><div class="icon">🗣️</div>Slang</div>
+<div class="game-preview-item"><div class="icon">🕵️</div>Who Am I</div>
+<div class="game-preview-item"><div class="icon">⚡</div>Speed</div>
+</div>
+</div>
+</section>
+
+<section class="screen" id="screenCreate">
+<h2 class="text-center mb-2" style="font-size:1.5rem;font-weight:800">CREATE YOUR ROOM</h2>
+<div class="card">
+<div class="form-group"><label for="createNickname">Your Nickname</label><input type="text" id="createNickname" class="input" placeholder="e.g. Mythic" maxlength="16" autocomplete="off"/></div>
+<div class="form-group"><label for="createCountrySearch">Your Country</label><div class="country-search-wrap"><input type="text" id="createCountrySearch" class="input" placeholder="Search country..." autocomplete="off"/><div class="country-dropdown" id="createCountryDropdown"></div></div><input type="hidden" id="createCountryCode"/></div>
+<div class="form-group"><label>Rounds</label><select id="createRounds" class="select"><option value="3">3</option><option value="5" selected>5</option><option value="8">8</option><option value="10">10</option></select></div>
+<div class="form-group"><label>Question Timer (seconds)</label><select id="createTimer" class="select"><option value="15">15</option><option value="20">20</option><option value="30" selected>30</option><option value="45">45</option><option value="60">60</option></select></div>
+<button class="btn btn-primary" id="btnCreateRoom">CREATE ROOM</button>
+<button class="btn btn-outline mt-1" id="btnBackFromCreate">Back</button>
+</div>
+</section>
+
+<section class="screen" id="screenJoin">
+<h2 class="text-center mb-2" style="font-size:1.5rem;font-weight:800">JOIN A GAME</h2>
+<div class="card">
+<div class="form-group"><label for="joinCode">Room Code</label><input type="text" id="joinCode" class="input" placeholder="A7K9P" maxlength="6" style="text-transform:uppercase;letter-spacing:.15em;font-weight:700;text-align:center;font-size:1.3rem" autocomplete="off"/></div>
+<div class="form-group"><label for="joinNickname">Your Nickname</label><input type="text" id="joinNickname" class="input" placeholder="e.g. Alex" maxlength="16" autocomplete="off"/></div>
+<div class="form-group"><label for="joinCountrySearch">Your Country</label><div class="country-search-wrap"><input type="text" id="joinCountrySearch" class="input" placeholder="Search country..." autocomplete="off"/><div class="country-dropdown" id="joinCountryDropdown"></div></div><input type="hidden" id="joinCountryCode"/></div>
+<button class="btn btn-primary" id="btnJoinRoom">JOIN ROOM</button>
+<button class="btn btn-outline mt-1" id="btnBackFromJoin">Back</button>
+</div>
+</section>
+
+<section class="screen" id="screenLobby">
+<div class="lobby-header">
+<p style="font-weight:600;color:#64748b;font-size:.9rem">ROOM CODE</p>
+<div class="lobby-code" id="lobbyCodeDisplay">-----</div>
+<div class="flex gap-1" style="justify-content:center">
+<button class="btn btn-sm btn-secondary" id="btnCopyCode">Copy Code</button>
+<button class="btn btn-sm btn-primary" id="btnShareWhatsApp">Share to WhatsApp</button>
+</div>
+</div>
+<h3 class="mb-1" style="font-weight:700">PLAYERS <span id="playerCount" style="font-weight:500;color:#64748b;font-size:.9rem"></span></h3>
+<div class="player-list" id="playerList"></div>
+<p class="waiting-text" id="lobbyWaitingText">Waiting for host...</p>
+<div id="hostControls" class="hidden"><button class="btn btn-primary" id="btnSelectGame">SELECT GAME</button></div>
+<button class="btn btn-outline mt-2" id="btnLeaveRoom">Leave Room</button>
+</section>
+
+<section class="screen" id="screenGameSelect">
+<h2 class="text-center mb-2" style="font-size:1.5rem;font-weight:800">CHOOSE YOUR GAME</h2>
+<div class="game-grid" id="gameGrid"></div>
+<button class="btn btn-outline mt-2" id="btnBackToLobby">Back to Lobby</button>
+</section>
+
+<section class="screen" id="screenGame">
+<div class="game-header">
+<div class="game-room-code" id="gameRoomCode">-----</div>
+<div class="game-round" id="gameRound">ROUND 1/5</div>
+</div>
+<div class="game-title" id="gameTitle">TRIVIA</div>
+<div class="question-card" id="questionArea"></div>
+<div class="timer-bar"><div class="timer-fill" id="timerFill"></div><div class="timer-text" id="timerText">30</div></div>
+<div id="answerArea"></div>
+<div class="game-score">Score: <span id="gameScore">0</span></div>
+<div id="answeredIndicator" class="text-center mt-1" style="font-size:.85rem;color:#64748b"></div>
+</section>
+
+<section class="screen" id="screenRoundResults">
+<h2 class="text-center mb-2" style="font-size:1.5rem;font-weight:800">🏆 ROUND RESULTS</h2>
+<div class="leaderboard" id="roundLeaderboard"></div>
+<div class="reactions" id="reactionsBar">
+<button class="reaction-btn" data-emoji="😂">😂</button>
+<button class="reaction-btn" data-emoji="🔥">🔥</button>
+<button class="reaction-btn" data-emoji="👏">👏</button>
+<button class="reaction-btn" data-emoji="😱">😱</button>
+<button class="reaction-btn" data-emoji="💯">💯</button>
+</div>
+<button class="btn btn-primary mt-2" id="btnNextRound">NEXT ROUND</button>
+<button class="btn btn-outline mt-1" id="btnBackToLobbyFromResults">Back to Lobby</button>
+</section>
+
+<section class="screen" id="screenFinalResults">
+<h2 class="text-center mb-2" style="font-size:1.6rem;font-weight:800">🏆 GAME COMPLETE</h2>
+<div class="final-podium" id="finalPodium"></div>
+<div class="leaderboard" id="finalLeaderboard"></div>
+<button class="btn btn-primary mt-2" id="btnPlayAgain">PLAY AGAIN</button>
+<button class="btn btn-secondary mt-1" id="btnChangeGame">CHANGE GAME</button>
+<button class="btn btn-outline mt-1" id="btnShareResults">SHARE RESULTS</button>
+<button class="btn btn-outline mt-1" id="btnLeaveFromFinal">LEAVE ROOM</button>
+</section>
+</div>
+
+<button class="sound-toggle" id="btnSound" title="Sound off">🔇</button>
+<div class="toast" id="toast"></div>
+<div class="loading-overlay hidden" id="loadingOverlay"><div class="spinner"></div></div>
+
+<script>
+const CONFIG = {
+  APP_NAME: "Global Game Room",
+  MAX_PLAYERS: 20,
+  DEFAULT_ROUNDS: 5,
+  DEFAULT_TIMER: 30,
+  ROOM_CODE_LENGTH: 5,
+  SUPABASE_URL: "https://ejmbjnohqmgpbgaajjki.supabase.co",
+  SUPABASE_ANON_KEY: "sb_publishable_YQPBm769QFYsr397A9zy2A_bBtV5Be7",
+  APP_URL: window.location.origin + window.location.pathname
+};
+
+let realtimeChannel = null;
+let nextQuestionCache = null;
+let timerInterval = null;
+let currentQuestion = null;
+let answeredThisRound = new Set();
+let soundEnabled = false;
+
+const appState = {
+  screen: "landing",
+  room: null,
+  player: null,
+  players: [],
+  connected: true,
+  selectedGame: null
+};
+
+const DOM = {
+  screens: {
+    landing: document.getElementById("screenLanding"),
+    create: document.getElementById("screenCreate"),
+    join: document.getElementById("screenJoin"),
+    lobby: document.getElementById("screenLobby"),
+    gameSelect: document.getElementById("screenGameSelect"),
+    game: document.getElementById("screenGame"),
+    roundResults: document.getElementById("screenRoundResults"),
+    finalResults: document.getElementById("screenFinalResults")
+  },
+  topBar: document.getElementById("topBar"),
+  topRoomCode: document.getElementById("topRoomCode"),
+  connectionDot: document.getElementById("connectionDot"),
+  toast: document.getElementById("toast"),
+  loadingOverlay: document.getElementById("loadingOverlay"),
+  btnGoCreate: document.getElementById("btnGoCreate"),
+  btnGoJoin: document.getElementById("btnGoJoin"),
+  createNickname: document.getElementById("createNickname"),
+  createCountrySearch: document.getElementById("createCountrySearch"),
+  createCountryDropdown: document.getElementById("createCountryDropdown"),
+  createCountryCode: document.getElementById("createCountryCode"),
+  createRounds: document.getElementById("createRounds"),
+  createTimer: document.getElementById("createTimer"),
+  btnCreateRoom: document.getElementById("btnCreateRoom"),
+  btnBackFromCreate: document.getElementById("btnBackFromCreate"),
+  joinCode: document.getElementById("joinCode"),
+  joinNickname: document.getElementById("joinNickname"),
+  joinCountrySearch: document.getElementById("joinCountrySearch"),
+  joinCountryDropdown: document.getElementById("joinCountryDropdown"),
+  joinCountryCode: document.getElementById("joinCountryCode"),
+  btnJoinRoom: document.getElementById("btnJoinRoom"),
+  btnBackFromJoin: document.getElementById("btnBackFromJoin"),
+  lobbyCodeDisplay: document.getElementById("lobbyCodeDisplay"),
+  playerList: document.getElementById("playerList"),
+  lobbyWaitingText: document.getElementById("lobbyWaitingText"),
+  hostControls: document.getElementById("hostControls"),
+  btnSelectGame: document.getElementById("btnSelectGame"),
+  btnCopyCode: document.getElementById("btnCopyCode"),
+  btnShareWhatsApp: document.getElementById("btnShareWhatsApp"),
+  btnLeaveRoom: document.getElementById("btnLeaveRoom"),
+  btnBackToLobby: document.getElementById("btnBackToLobby")
+};
+
+const COUNTRIES = [
+  {code:"AF",name:"Afghanistan",flag:"🇦🇫"},{code:"AL",name:"Albania",flag:"🇦🇱"},{code:"DZ",name:"Algeria",flag:"🇩🇿"},{code:"AD",name:"Andorra",flag:"🇦🇩"},
+  {code:"AO",name:"Angola",flag:"🇦🇴"},{code:"AG",name:"Antigua and Barbuda",flag:"🇦🇬"},{code:"AR",name:"Argentina",flag:"🇦🇷"},{code:"AM",name:"Armenia",flag:"🇦🇲"},
+  {code:"AU",name:"Australia",flag:"🇦🇺"},{code:"AT",name:"Austria",flag:"🇦🇹"},{code:"AZ",name:"Azerbaijan",flag:"🇦🇿"},{code:"BS",name:"Bahamas",flag:"🇧🇸"},
+  {code:"BH",name:"Bahrain",flag:"🇧🇭"},{code:"BD",name:"Bangladesh",flag:"🇧🇩"},{code:"BB",name:"Barbados",flag:"🇧🇧"},{code:"BY",name:"Belarus",flag:"🇧🇾"},
+  {code:"BE",name:"Belgium",flag:"🇧🇪"},{code:"BZ",name:"Belize",flag:"🇧🇿"},{code:"BJ",name:"Benin",flag:"🇧🇯"},{code:"BT",name:"Bhutan",flag:"🇧🇹"},
+  {code:"BO",name:"Bolivia",flag:"🇧🇴"},{code:"BA",name:"Bosnia and Herzegovina",flag:"🇧🇦"},{code:"BW",name:"Botswana",flag:"🇧🇼"},{code:"BR",name:"Brazil",flag:"🇧🇷"},
+  {code:"BN",name:"Brunei",flag:"🇧🇳"},{code:"BG",name:"Bulgaria",flag:"🇧🇬"},{code:"BF",name:"Burkina Faso",flag:"🇧🇫"},{code:"BI",name:"Burundi",flag:"🇧🇮"},
+  {code:"CV",name:"Cabo Verde",flag:"🇨🇻"},{code:"KH",name:"Cambodia",flag:"🇰🇭"},{code:"CM",name:"Cameroon",flag:"🇨🇲"},{code:"CA",name:"Canada",flag:"🇨🇦"},
+  {code:"CF",name:"Central African Republic",flag:"🇨🇫"},{code:"TD",name:"Chad",flag:"🇹🇩"},{code:"CL",name:"Chile",flag:"🇨🇱"},{code:"CN",name:"China",flag:"🇨🇳"},
+  {code:"CO",name:"Colombia",flag:"🇨🇴"},{code:"KM",name:"Comoros",flag:"🇰🇲"},{code:"CG",name:"Congo",flag:"🇨🇬"},{code:"CD",name:"Congo (DRC)",flag:"🇨🇩"},
+  {code:"CR",name:"Costa Rica",flag:"🇨🇷"},{code:"CI",name:"Côte d'Ivoire",flag:"🇨🇮"},{code:"HR",name:"Croatia",flag:"🇭🇷"},{code:"CU",name:"Cuba",flag:"🇨🇺"},
+  {code:"CY",name:"Cyprus",flag:"🇨🇾"},{code:"CZ",name:"Czechia",flag:"🇨🇿"},{code:"DK",name:"Denmark",flag:"🇩🇰"},{code:"DJ",name:"Djibouti",flag:"🇩🇯"},
+  {code:"DM",name:"Dominica",flag:"🇩🇲"},{code:"DO",name:"Dominican Republic",flag:"🇩🇴"},{code:"EC",name:"Ecuador",flag:"🇪🇨"},{code:"EG",name:"Egypt",flag:"🇪🇬"},
+  {code:"SV",name:"El Salvador",flag:"🇸🇻"},{code:"GQ",name:"Equatorial Guinea",flag:"🇬🇶"},{code:"ER",name:"Eritrea",flag:"🇪🇷"},{code:"EE",name:"Estonia",flag:"🇪🇪"},
+  {code:"SZ",name:"Eswatini",flag:"🇸🇿"},{code:"ET",name:"Ethiopia",flag:"🇪🇹"},{code:"FJ",name:"Fiji",flag:"🇫🇯"},{code:"FI",name:"Finland",flag:"🇫🇮"},
+  {code:"FR",name:"France",flag:"🇫🇷"},{code:"GA",name:"Gabon",flag:"🇬🇦"},{code:"GM",name:"Gambia",flag:"🇬🇲"},{code:"GE",name:"Georgia",flag:"🇬🇪"},
+  {code:"DE",name:"Germany",flag:"🇩🇪"},{code:"GH",name:"Ghana",flag:"🇬🇭"},{code:"GR",name:"Greece",flag:"🇬🇷"},{code:"GD",name:"Grenada",flag:"🇬🇩"},
+  {code:"GT",name:"Guatemala",flag:"🇬🇹"},{code:"GN",name:"Guinea",flag:"🇬🇳"},{code:"GW",name:"Guinea-Bissau",flag:"🇬🇼"},{code:"GY",name:"Guyana",flag:"🇬🇾"},
+  {code:"HT",name:"Haiti",flag:"🇭🇹"},{code:"HN",name:"Honduras",flag:"🇭🇳"},{code:"HU",name:"Hungary",flag:"🇭🇺"},{code:"IS",name:"Iceland",flag:"🇮🇸"},
+  {code:"IN",name:"India",flag:"🇮🇳"},{code:"ID",name:"Indonesia",flag:"🇮🇩"},{code:"IR",name:"Iran",flag:"🇮🇷"},{code:"IQ",name:"Iraq",flag:"🇮🇶"},
+  {code:"IE",name:"Ireland",flag:"🇮🇪"},{code:"IL",name:"Israel",flag:"🇮🇱"},{code:"IT",name:"Italy",flag:"🇮🇹"},{code:"JM",name:"Jamaica",flag:"🇯🇲"},
+  {code:"JP",name:"Japan",flag:"🇯🇵"},{code:"JO",name:"Jordan",flag:"🇯🇴"},{code:"KZ",name:"Kazakhstan",flag:"🇰🇿"},{code:"KE",name:"Kenya",flag:"🇰🇪"},
+  {code:"KI",name:"Kiribati",flag:"🇰🇮"},{code:"KP",name:"North Korea",flag:"🇰🇵"},{code:"KR",name:"South Korea",flag:"🇰🇷"},{code:"KW",name:"Kuwait",flag:"🇰🇼"},
+  {code:"KG",name:"Kyrgyzstan",flag:"🇰🇬"},{code:"LA",name:"Laos",flag:"🇱🇦"},{code:"LV",name:"Latvia",flag:"🇱🇻"},{code:"LB",name:"Lebanon",flag:"🇱🇧"},
+  {code:"LS",name:"Lesotho",flag:"🇱🇸"},{code:"LR",name:"Liberia",flag:"🇱🇷"},{code:"LY",name:"Libya",flag:"🇱🇾"},{code:"LI",name:"Liechtenstein",flag:"🇱🇮"},
+  {code:"LT",name:"Lithuania",flag:"🇱🇹"},{code:"LU",name:"Luxembourg",flag:"🇱🇺"},{code:"MG",name:"Madagascar",flag:"🇲🇬"},{code:"MW",name:"Malawi",flag:"🇲🇼"},
+  {code:"MY",name:"Malaysia",flag:"🇲🇾"},{code:"MV",name:"Maldives",flag:"🇲🇻"},{code:"ML",name:"Mali",flag:"🇲🇱"},{code:"MT",name:"Malta",flag:"🇲🇹"},
+  {code:"MH",name:"Marshall Islands",flag:"🇲🇭"},{code:"MR",name:"Mauritania",flag:"🇲🇷"},{code:"MU",name:"Mauritius",flag:"🇲🇺"},{code:"MX",name:"Mexico",flag:"🇲🇽"},
+  {code:"FM",name:"Micronesia",flag:"🇫🇲"},{code:"MD",name:"Moldova",flag:"🇲🇩"},{code:"MC",name:"Monaco",flag:"🇲🇨"},{code:"MN",name:"Mongolia",flag:"🇲🇳"},
+  {code:"ME",name:"Montenegro",flag:"🇲🇪"},{code:"MA",name:"Morocco",flag:"🇲🇦"},{code:"MZ",name:"Mozambique",flag:"🇲🇿"},{code:"MM",name:"Myanmar",flag:"🇲🇲"},
+  {code:"NA",name:"Namibia",flag:"🇳🇦"},{code:"NR",name:"Nauru",flag:"🇳🇷"},{code:"NP",name:"Nepal",flag:"🇳🇵"},{code:"NL",name:"Netherlands",flag:"🇳🇱"},
+  {code:"NZ",name:"New Zealand",flag:"🇳🇿"},{code:"NI",name:"Nicaragua",flag:"🇳🇮"},{code:"NE",name:"Niger",flag:"🇳🇪"},{code:"NG",name:"Nigeria",flag:"🇳🇬"},
+  {code:"MK",name:"North Macedonia",flag:"🇲🇰"},{code:"NO",name:"Norway",flag:"🇳🇴"},{code:"OM",name:"Oman",flag:"🇴🇲"},{code:"PK",name:"Pakistan",flag:"🇵🇰"},
+  {code:"PW",name:"Palau",flag:"🇵🇼"},{code:"PS",name:"Palestine",flag:"🇵🇸"},{code:"PA",name:"Panama",flag:"🇵🇦"},{code:"PG",name:"Papua New Guinea",flag:"🇵🇬"},
+  {code:"PY",name:"Paraguay",flag:"🇵🇾"},{code:"PE",name:"Peru",flag:"🇵🇪"},{code:"PH",name:"Philippines",flag:"🇵🇭"},{code:"PL",name:"Poland",flag:"🇵🇱"},
+  {code:"PT",name:"Portugal",flag:"🇵🇹"},{code:"QA",name:"Qatar",flag:"🇶🇦"},{code:"RO",name:"Romania",flag:"🇷🇴"},{code:"RU",name:"Russia",flag:"🇷🇺"},
+  {code:"RW",name:"Rwanda",flag:"🇷🇼"},{code:"KN",name:"Saint Kitts and Nevis",flag:"🇰🇳"},{code:"LC",name:"Saint Lucia",flag:"🇱🇨"},{code:"VC",name:"Saint Vincent and the Grenadines",flag:"🇻🇨"},
+  {code:"WS",name:"Samoa",flag:"🇼🇸"},{code:"SM",name:"San Marino",flag:"🇸🇲"},{code:"ST",name:"Sao Tome and Principe",flag:"🇸🇹"},{code:"SA",name:"Saudi Arabia",flag:"🇸🇦"},
+  {code:"SN",name:"Senegal",flag:"🇸🇳"},{code:"RS",name:"Serbia",flag:"🇷🇸"},{code:"SC",name:"Seychelles",flag:"🇸🇨"},{code:"SL",name:"Sierra Leone",flag:"🇸🇱"},
+  {code:"SG",name:"Singapore",flag:"🇸🇬"},{code:"SK",name:"Slovakia",flag:"🇸🇰"},{code:"SI",name:"Slovenia",flag:"🇸🇮"},{code:"SB",name:"Solomon Islands",flag:"🇸🇧"},
+  {code:"SO",name:"Somalia",flag:"🇸🇴"},{code:"ZA",name:"South Africa",flag:"🇿🇦"},{code:"SS",name:"South Sudan",flag:"🇸🇸"},{code:"ES",name:"Spain",flag:"🇪🇸"},
+  {code:"LK",name:"Sri Lanka",flag:"🇱🇰"},{code:"SD",name:"Sudan",flag:"🇸🇩"},{code:"SR",name:"Suriname",flag:"🇸🇷"},{code:"SE",name:"Sweden",flag:"🇸🇪"},
+  {code:"CH",name:"Switzerland",flag:"🇨🇭"},{code:"SY",name:"Syria",flag:"🇸🇾"},{code:"TW",name:"Taiwan",flag:"🇹🇼"},{code:"TJ",name:"Tajikistan",flag:"🇹🇯"},
+  {code:"TZ",name:"Tanzania",flag:"🇹🇿"},{code:"TH",name:"Thailand",flag:"🇹🇭"},{code:"TL",name:"Timor-Leste",flag:"🇹🇱"},{code:"TG",name:"Togo",flag:"🇹🇬"},
+  {code:"TO",name:"Tonga",flag:"🇹🇴"},{code:"TT",name:"Trinidad and Tobago",flag:"🇹🇹"},{code:"TN",name:"Tunisia",flag:"🇹🇳"},{code:"TR",name:"Turkey",flag:"🇹🇷"},
+  {code:"TM",name:"Turkmenistan",flag:"🇹🇲"},{code:"TV",name:"Tuvalu",flag:"🇹🇻"},{code:"UG",name:"Uganda",flag:"🇺🇬"},{code:"UA",name:"Ukraine",flag:"🇺🇦"},
+  {code:"AE",name:"United Arab Emirates",flag:"🇦🇪"},{code:"GB",name:"United Kingdom",flag:"🇬🇧"},{code:"US",name:"United States",flag:"🇺🇸"},{code:"UY",name:"Uruguay",flag:"🇺🇾"},
+  {code:"UZ",name:"Uzbekistan",flag:"🇺🇿"},{code:"VU",name:"Vanuatu",flag:"🇻🇺"},{code:"VA",name:"Vatican City",flag:"🇻🇦"},{code:"VE",name:"Venezuela",flag:"🇻🇪"},
+  {code:"VN",name:"Vietnam",flag:"🇻🇳"},{code:"YE",name:"Yemen",flag:"🇾🇪"},{code:"ZM",name:"Zambia",flag:"🇿🇲"},{code:"ZW",name:"Zimbabwe",flag:"🇿🇼"}
+];
+
+const GAMES = [
+  {id:"guess-country",icon:"🌍",title:"Guess the Country",desc:"Identify the country from clues"},
+  {id:"trivia",icon:"🧠",title:"Trivia",desc:"Test your knowledge"},
+  {id:"would-you-rather",icon:"😂",title:"Would You Rather",desc:"Pick your side"},
+  {id:"emoji-charades",icon:"🎭",title:"Emoji Charades",desc:"Decode the emojis"},
+  {id:"random-challenge",icon:"🎲",title:"Random Challenge",desc:"You never know what's next"},
+  {id:"guess-slang",icon:"🗣️",title:"Guess the Slang",desc:"Can you understand the world?"},
+  {id:"who-am-i",icon:"🕵️",title:"Who Am I?",desc:"Guess the mystery person"},
+  {id:"speed-round",icon:"⚡",title:"Speed Round",desc:"Answer before time runs out"}
+];
+
+const FALLBACK_TRIVIA = [
+  {question:"Which planet is known as the Red Planet?",options:["Venus","Mars","Jupiter","Mercury"],correctIndex:1},
+  {question:"What is the largest ocean on Earth?",options:["Atlantic Ocean","Indian Ocean","Arctic Ocean","Pacific Ocean"],correctIndex:3},
+  {question:"Which country is home to the kangaroo?",options:["New Zealand","South Africa","Australia","Brazil"],correctIndex:2}
+];
+const FALLBACK_GUESS_COUNTRY = [
+  {question:"Which country is home to the Eiffel Tower?",options:["Italy","Spain","France","Germany"],correctIndex:2},
+  {question:"Which country has Tokyo as its capital?",options:["China","Japan","South Korea","Thailand"],correctIndex:1},
+  {question:"Which country is famous for the pyramids of Giza?",options:["Morocco","Egypt","Sudan","Libya"],correctIndex:1},
+  {question:"Which country is known as the land of the rising sun?",options:["China","Japan","Vietnam","Indonesia"],correctIndex:1},
+  {question:"Which country has most of the Amazon rainforest?",options:["Colombia","Peru","Brazil","Argentina"],correctIndex:2}
+];
+const FALLBACK_WOULD_YOU_RATHER = [
+  {question:"Would you rather...",options:["Have the ability to fly","Be invisible"],correctIndex:-1},
+  {question:"Would you rather...",options:["Always be 10 minutes late","Always be 20 minutes early"],correctIndex:-1},
+  {question:"Would you rather...",options:["Live without music","Live without movies"],correctIndex:-1},
+  {question:"Would you rather...",options:["Be able to speak every language","Be able to talk to animals"],correctIndex:-1}
+];
+const FALLBACK_EMOJI_CHARADES = [
+  {question:"Decode this emoji: 🍕🇮🇹",options:["Italian Pizza","Pizza Delivery","Food Fight","Hungry"],correctIndex:0},
+  {question:"Decode this emoji: 🦁👑",options:["Lion King","Zoo","Safari","Cat"],correctIndex:0},
+  {question:"Decode this emoji: 🚀🌙",options:["Space Travel","Moon Landing","Rocket","Alien"],correctIndex:1},
+  {question:"Decode this emoji: 🎸🔥",options:["Rock Music","Concert","Guitar Solo","Band"],correctIndex:0}
+];
+const FALLBACK_SPEED_ROUND = [
+  {question:"Capital of France?",options:["Paris","Lyon","Marseille","Nice"],correctIndex:0},
+  {question:"2 + 2 = ?",options:["3","4","5","22"],correctIndex:1},
+  {question:"Color of the sky on a clear day?",options:["Green","Blue","Red","Yellow"],correctIndex:1},
+  {question:"How many days in a week?",options:["5","6","7","8"],correctIndex:2}
+];
+const FALLBACK_GUESS_SLANG = [
+  {question:"What does 'lit' mean?",options:["On fire","Exciting / awesome","Drunk","Heavy"],correctIndex:1},
+  {question:"What does 'ghosting' mean?",options:["Seeing ghosts","Ignoring someone","Moving house","Playing games"],correctIndex:1},
+  {question:"What does 'flex' mean?",options:["Exercise","Show off","Bend","Pay"],correctIndex:1},
+  {question:"What does 'sus' mean?",options:["Suspicious","Successful","Sudden","Super"],correctIndex:0}
+];
+const FALLBACK_RANDOM_CHALLENGE = [
+  {question:"Name a fruit that starts with 'A'",options:["Apple","Banana","Orange","Grape"],correctIndex:0},
+  {question:"Which animal is the fastest on land?",options:["Lion","Cheetah","Horse","Gazelle"],correctIndex:1},
+  {question:"What do you call a baby cat?",options:["Puppy","Cub","Kitten","Calf"],correctIndex:2},
+  {question:"Which planet is closest to the Sun?",options:["Venus","Mercury","Earth","Mars"],correctIndex:1}
+];
+const FALLBACK_WHO_AM_I = [
+  {question:"I invented the light bulb. Who am I?",options:["Nikola Tesla","Thomas Edison","Albert Einstein","Alexander Bell"],correctIndex:1},
+  {question:"I painted the Mona Lisa. Who am I?",options:["Michelangelo","Raphael","Leonardo da Vinci","Picasso"],correctIndex:2},
+  {question:"I was the first person on the Moon. Who am I?",options:["Buzz Aldrin","Yuri Gagarin","Neil Armstrong","John Glenn"],correctIndex:2},
+  {question:"I wrote Romeo and Juliet. Who am I?",options:["Charles Dickens","William Shakespeare","Mark Twain","Jane Austen"],correctIndex:1}
+];
+
+function randomEmoji() {
+  const e = ["😎","🔥","🚀","🎯","🌟","🦊","🐼","🦄","🐱","🐶","🐸","🦁","🐯","🐻","🐨","🐵","🐔","🐧","🐢","🦖","🎮","🎲","🧩","🎸","🎧","🍕","🍔","🍩","⚡","🌈","👻","🤖","👽","🎃","👑","💎","🍀","🌊"];
+  return e[Math.floor(Math.random() * e.length)];
+}
+
+function showToast(msg, d) {
+  d = d || 2500;
+  DOM.toast.textContent = msg;
+  DOM.toast.classList.add("show");
+  clearTimeout(DOM.toast._timer);
+  DOM.toast._timer = setTimeout(function() {
+    DOM.toast.classList.remove("show");
+  }, d);
+}
+
+function showLoading(show) {
+  DOM.loadingOverlay.classList.toggle("hidden", !show);
+}
+
+function saveLocal(k, v) {
+  try { localStorage.setItem("ggr_" + k, JSON.stringify(v)); } catch(e) {}
+}
+
+function loadLocal(k, f) {
+  f = f === undefined ? null : f;
+  try {
+    const v = localStorage.getItem("ggr_" + k);
+    return v ? JSON.parse(v) : f;
+  } catch(e) { return f; }
+}
+
+function saveSession() {
+  if (!appState.room || !appState.player) return;
+  try {
+    localStorage.setItem("ggr_session", JSON.stringify({
+      roomCode: appState.room.code,
+      roomId: appState.room.id,
+      playerId: appState.player.id,
+      nickname: appState.player.nickname,
+      isHost: appState.player.isHost
+    }));
+  } catch(e) {}
+}
+
+function clearSession() {
+  try { localStorage.removeItem("ggr_session"); } catch(e) {}
+}
+
+function playSound(type) {
+  if (!soundEnabled) return;
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    if (type === "correct") { osc.frequency.value = 880; gain.gain.value = 0.1; }
+    else if (type === "wrong") { osc.frequency.value = 220; gain.gain.value = 0.1; }
+    else { osc.frequency.value = 440; gain.gain.value = 0.08; }
+    osc.start();
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+    osc.stop(ctx.currentTime + 0.3);
+  } catch(e) {}
+}
+
+function showScreen(name) {
+  Object.values(DOM.screens).forEach(function(s) { s.classList.remove("active"); });
+  if (DOM.screens[name]) {
+    DOM.screens[name].classList.add("active");
+    appState.screen = name;
+  }
+  const showTop = name !== "landing";
+  DOM.topBar.classList.toggle("hidden", !showTop);
+  if (appState.room) {
+    DOM.topRoomCode.textContent = appState.room.code;
+    DOM.topRoomCode.classList.remove("hidden");
+  } else {
+    DOM.topRoomCode.classList.add("hidden");
+  }
+  window.scrollTo(0, 0);
+}
+
+function setupCountrySelector(searchInput, dropdown, hiddenCode) {
+  function renderOptions(filter) {
+    filter = filter || "";
+    const q = filter.toLowerCase().trim();
+    const list = COUNTRIES.filter(function(c) {
+      return c.name.toLowerCase().includes(q) || c.code.toLowerCase().includes(q);
+    }).slice(0, 40);
+    dropdown.innerHTML = list.map(function(c) {
+      return '<div class="country-option" data-code="' + c.code + '"><span>' + c.flag + '</span><span>' + c.name + '</span></div>';
+    }).join("");
+    dropdown.classList.toggle("open", list.length > 0 && q.length > 0);
+  }
+  searchInput.addEventListener("input", function() {
+    hiddenCode.value = "";
+    renderOptions(searchInput.value);
+  });
+  searchInput.addEventListener("focus", function() {
+    if (searchInput.value) renderOptions(searchInput.value);
+  });
+  dropdown.addEventListener("click", function(e) {
+    const opt = e.target.closest(".country-option");
+    if (!opt) return;
+    const code = opt.dataset.code;
+    const country = COUNTRIES.find(function(c) { return c.code === code; });
+    if (country) {
+      searchInput.value = country.flag + " " + country.name;
+      hiddenCode.value = code;
+      dropdown.classList.remove("open");
+    }
+  });
+  document.addEventListener("click", function(e) {
+    if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) {
+      dropdown.classList.remove("open");
+    }
+  });
+}
+
+function subscribeToRoom(roomCode) {
+  if (realtimeChannel) {
+    try {
+      window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY).removeChannel(realtimeChannel);
+    } catch(e) {}
+  }
+  const supabase = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+  realtimeChannel = supabase.channel("room:" + roomCode)
+    .on("postgres_changes", {
+      event: "*",
+      schema: "public",
+      table: "players",
+      filter: "room_id=eq." + appState.room.id
+    }, function() {
+      refreshPlayers();
+    })
+    .subscribe(function(status) {
+      if (status === "SUBSCRIBED") {
+        DOM.connectionDot.classList.remove("offline");
+        DOM.connectionDot.title = "Connected";
+      } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+        DOM.connectionDot.classList.add("offline");
+        DOM.connectionDot.title = "Connection issue";
+      }
+    });
+}
+
+async function refreshPlayers() {
+  if (!appState.room) return;
+  const supabase = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+  const { data } = await supabase
+    .from("players")
+    .select("*")
+    .eq("room_id", appState.room.id)
+    .eq("connected", true)
+    .order("joined_at");
+  if (data) {
+    const prevCount = appState.players.length;
+    appState.players = data.map(function(p) {
+      return {
+        id: p.id,
+        nickname: p.nickname,
+        country: p.country,
+        countryCode: p.country_code,
+        flag: p.flag,
+        avatar: p.avatar,
+        isHost: p.is_host,
+        score: p.score || 0,
+        answered_round: p.answered_round || 0
+      };
+    });
+    renderPlayerList();
+    if (appState.players.length > prevCount && prevCount > 0) {
+      showToast("A player joined!");
+      playSound("join");
+    }
+    const me = appState.players.find(function(p) { return p.id === appState.player.id; });
+    if (me) {
+      appState.player.isHost = me.isHost;
+      if (me.isHost) {
+        DOM.hostControls.classList.remove("hidden");
+        DOM.lobbyWaitingText.textContent = "You are the host. Select a game when ready.";
+      }
+    }
+  }
+}
+
+async function leaveRoomProperly() {
+  showLoading(true);
+  try {
+    if (appState.room && appState.player) {
+      await fetch(CONFIG.SUPABASE_URL + "/functions/v1/leave-room", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + CONFIG.SUPABASE_ANON_KEY
+        },
+        body: JSON.stringify({
+          roomId: appState.room.id,
+          playerId: appState.player.id
+        })
+      });
+    }
+  } catch(e) {}
+  appState.room = null;
+  appState.player = null;
+  appState.players = [];
+  nextQuestionCache = null;
+  answeredThisRound.clear();
+  clearSession();
+  if (realtimeChannel) {
+    try {
+      window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY).removeChannel(realtimeChannel);
+    } catch(e) {}
+    realtimeChannel = null;
+  }
+  showScreen("landing");
+  showToast("You left the room");
+  showLoading(false);
+}
+
+async function createRoom(nickname, countryCode, rounds, timer) {
+  const country = COUNTRIES.find(function(c) { return c.code === countryCode; });
+  const avatar = randomEmoji();
+  const res = await fetch(CONFIG.SUPABASE_URL + "/functions/v1/create-room", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + CONFIG.SUPABASE_ANON_KEY
+    },
+    body: JSON.stringify({
+      nickname: nickname,
+      country: country.name,
+      countryCode: country.code,
+      flag: country.flag,
+      avatar: avatar,
+      rounds: Number(rounds),
+      timer: Number(timer)
+    })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Failed to create room");
+  appState.player = data.player;
+  appState.room = data.room;
+  appState.players = [data.player];
+  saveLocal("lastNickname", nickname);
+  saveLocal("lastCountry", countryCode);
+  saveSession();
+  return data.room.code;
+}
+
+async function joinRoom(code, nickname, countryCode) {
+  const country = COUNTRIES.find(function(c) { return c.code === countryCode; });
+  const avatar = randomEmoji();
+  const res = await fetch(CONFIG.SUPABASE_URL + "/functions/v1/join-room", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + CONFIG.SUPABASE_ANON_KEY
+    },
+    body: JSON.stringify({
+      code: code.toUpperCase(),
+      nickname: nickname,
+      country: country.name,
+      countryCode: country.code,
+      flag: country.flag,
+      avatar: avatar
+    })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Failed to join room");
+  appState.player = data.player;
+  appState.room = data.room;
+  appState.players = data.players || [data.player];
+  saveLocal("lastNickname", nickname);
+  saveLocal("lastCountry", countryCode);
+  saveSession();
+}
+
+function renderPlayerList() {
+  const countEl = document.getElementById("playerCount");
+  if (countEl) countEl.textContent = "(" + appState.players.length + ")";
+  const currentRound = (appState.room && appState.room.round_number) || 1;
+  DOM.playerList.innerHTML = appState.players.map(function(p) {
+    const isAnswered = p.answered_round === currentRound;
+    return '<div class="player-row' + (isAnswered ? ' answered' : '') + '">' +
+      '<div class="player-avatar">' + p.avatar + '</div>' +
+      '<div class="player-info">' +
+        '<div class="player-name">' + p.flag + ' ' + p.nickname +
+          (isAnswered ? ' <span class="answered-badge">✓</span>' : '') +
+        '</div>' +
+        '<div class="player-country">' + p.country + '</div>' +
+      '</div>' +
+      (p.isHost ? '<span class="host-badge">HOST</span>' : '') +
+    '</div>';
+  }).join("");
+}
+
+function enterLobby() {
+  DOM.lobbyCodeDisplay.textContent = appState.room.code;
+  renderPlayerList();
+  if (appState.player.isHost) {
+    DOM.hostControls.classList.remove("hidden");
+    DOM.lobbyWaitingText.textContent = "You are the host. Select a game when ready.";
+  } else {
+    DOM.hostControls.classList.add("hidden");
+    DOM.lobbyWaitingText.textContent = "Waiting for host...";
+  }
+  showScreen("lobby");
+  subscribeToRoom(appState.room.code);
+}
+
+function renderGameSelection() {
+  const grid = document.getElementById("gameGrid");
+  if (!grid) return;
+  grid.innerHTML = GAMES.map(function(game) {
+    return '<div class="game-card" data-game="' + game.id + '">' +
+      '<div class="game-icon">' + game.icon + '</div>' +
+      '<div class="game-title">' + game.title + '</div>' +
+      '<div class="game-desc">' + game.desc + '</div>' +
+    '</div>';
+  }).join("");
+  if (!appState.player || !appState.player.isHost) {
+    grid.querySelectorAll(".game-card").forEach(function(card) {
+      card.style.opacity = "0.6";
+      card.style.pointerEvents = "none";
+    });
+    return;
+  }
+  grid.querySelectorAll(".game-card").forEach(function(card) {
+    card.addEventListener("click", async function() {
+      const gameId = card.dataset.game;
+      grid.querySelectorAll(".game-card").forEach(function(c) { c.classList.remove("selected"); });
+      card.classList.add("selected");
+      showLoading(true);
+      try {
+        await startGame(gameId);
+        launchGame(gameId);
+      } catch(err) {
+        showToast(err.message || "Could not start game");
+        card.classList.remove("selected");
+      } finally {
+        showLoading(false);
+      }
+    });
+  });
+}
+
+function launchGame(gameId) {
+  nextQuestionCache = null;
+  answeredThisRound.clear();
+  if (gameId === "trivia") startTriviaRound();
+  else if (gameId === "guess-country") startGuessCountryRound();
+  else if (gameId === "would-you-rather") startWouldYouRatherRound();
+  else if (gameId === "emoji-charades") startEmojiCharadesRound();
+  else if (gameId === "speed-round") startSpeedRound();
+  else if (gameId === "guess-slang") startGuessSlangRound();
+  else if (gameId === "random-challenge") startRandomChallengeRound();
+  else if (gameId === "who-am-i") startWhoAmIRound();
+  else {
+    showToast("This game is coming soon!");
+    showScreen("lobby");
+  }
+}
+
+function initEvents() {
+  DOM.btnGoCreate.addEventListener("click", function() {
+    const lastNick = loadLocal("lastNickname", "");
+    const lastCountry = loadLocal("lastCountry", "");
+    DOM.createNickname.value = lastNick;
+    if (lastCountry) {
+      const c = COUNTRIES.find(function(x) { return x.code === lastCountry; });
+      if (c) {
+        DOM.createCountrySearch.value = c.flag + " " + c.name;
+        DOM.createCountryCode.value = c.code;
+      }
+    }
+    showScreen("create");
+  });
+
+  DOM.btnGoJoin.addEventListener("click", function() {
+    const lastNick = loadLocal("lastNickname", "");
+    const lastCountry = loadLocal("lastCountry", "");
+    DOM.joinNickname.value = lastNick;
+    if (lastCountry) {
+      const c = COUNTRIES.find(function(x) { return x.code === lastCountry; });
+      if (c) {
+        DOM.joinCountrySearch.value = c.flag + " " + c.name;
+        DOM.joinCountryCode.value = c.code;
+      }
+    }
+    const params = new URLSearchParams(window.location.search);
+    const roomParam = params.get("room");
+    if (roomParam) DOM.joinCode.value = roomParam.toUpperCase();
+    showScreen("join");
+  });
+
+  DOM.btnBackFromCreate.addEventListener("click", function() { showScreen("landing"); });
+
+  DOM.btnCreateRoom.addEventListener("click", async function() {
+    const nick = DOM.createNickname.value.trim();
+    const countryCode = DOM.createCountryCode.value;
+    if (!nick) { showToast("Please enter a nickname"); return; }
+    if (!countryCode) { showToast("Please select your country"); return; }
+    if (nick.length < 2) { showToast("Nickname too short"); return; }
+    showLoading(true);
+    try {
+      const code = await createRoom(nick, countryCode, DOM.createRounds.value, DOM.createTimer.value);
+      enterLobby();
+      showToast("Room created: " + code);
+    } catch(err) {
+      showToast(err.message || "Could not create room");
+    } finally {
+      showLoading(false);
+    }
+  });
+
+  DOM.btnBackFromJoin.addEventListener("click", function() { showScreen("landing"); });
+
+  DOM.btnJoinRoom.addEventListener("click", async function() {
+    const code = DOM.joinCode.value.trim().toUpperCase();
+    const nick = DOM.joinNickname.value.trim();
+    const countryCode = DOM.joinCountryCode.value;
+    if (!code || code.length < 4) { showToast("Enter a valid room code"); return; }
+    if (!nick) { showToast("Please enter a nickname"); return; }
+    if (!countryCode) { showToast("Please select your country"); return; }
+    showLoading(true);
+    try {
+      await joinRoom(code, nick, countryCode);
+      enterLobby();
+      showToast("Joined room " + code);
+    } catch(err) {
+      showToast(err.message || "Could not join room");
+    } finally {
+      showLoading(false);
+    }
+  });
+
+  DOM.btnCopyCode.addEventListener("click", function() {
+    if (!appState.room) return;
+    navigator.clipboard.writeText(appState.room.code)
+      .then(function() { showToast("Code copied!"); })
+      .catch(function() { showToast("Could not copy"); });
+  });
+
+  DOM.btnShareWhatsApp.addEventListener("click", function() {
+    if (!appState.room) return;
+    const text = "🎮 GLOBAL GAME ROOM\n\nI'm starting a game!\n\nRoom Code: " + appState.room.code + "\n\nJoin here:\n" + CONFIG.APP_URL + "?room=" + appState.room.code + "\n\nNo account needed.";
+    window.open("https://wa.me/?text=" + encodeURIComponent(text), "_blank");
+  });
+
+  DOM.btnSelectGame.addEventListener("click", function() {
+    renderGameSelection();
+    showScreen("gameSelect");
+  });
+
+  DOM.btnBackToLobby.addEventListener("click", function() { showScreen("lobby"); });
+
+  DOM.btnLeaveRoom.addEventListener("click", function() {
+    if (confirm("Leave this room?")) leaveRoomProperly();
+  });
+
+  document.getElementById("btnNextRound").addEventListener("click", async function() {
+    appState.room.round_number = (appState.room.round_number || 1) + 1;
+    if (appState.room.round_number > (appState.room.total_rounds || 5)) {
+      showFinalResults(appState.players);
+      return;
+    }
+    launchGame(appState.selectedGame);
+  });
+
+  document.getElementById("btnBackToLobbyFromResults").addEventListener("click", function() {
+    showScreen("lobby");
+  });
+
+  document.getElementById("btnPlayAgain").addEventListener("click", function() {
+    showScreen("gameSelect");
+  });
+
+  document.getElementById("btnChangeGame").addEventListener("click", function() {
+    showScreen("gameSelect");
+  });
+
+  document.getElementById("btnLeaveFromFinal").addEventListener("click", function() {
+    if (confirm("Leave this room?")) leaveRoomProperly();
+  });
+
+  document.getElementById("btnShareResults").addEventListener("click", function() {
+    if (!appState.players.length) return;
+    const sorted = appState.players.slice().sort(function(a, b) { return b.score - a.score; });
+    let text = "🏆 GLOBAL GAME ROOM RESULTS\n\n";
+    sorted.forEach(function(p, i) {
+      text += (i + 1) + ". " + p.flag + " " + p.nickname + " — " + p.score + " pts\n";
+    });
+    text += "\nPlay at: " + CONFIG.APP_URL;
+    if (navigator.share) {
+      navigator.share({ title: "Game Results", text: text }).catch(function() {});
+    } else {
+      navigator.clipboard.writeText(text)
+        .then(function() { showToast("Results copied!"); })
+        .catch(function() { showToast("Could not share"); });
+    }
+  });
+
+  document.getElementById("btnSound").addEventListener("click", function() {
+    soundEnabled = !soundEnabled;
+    this.textContent = soundEnabled ? "🔊" : "🔇";
+    this.title = soundEnabled ? "Sound on" : "Sound off";
+    showToast(soundEnabled ? "Sound on" : "Sound off");
+  });
+
+  document.querySelectorAll(".reaction-btn").forEach(function(btn) {
+    btn.addEventListener("click", function() {
+      showToast(btn.dataset.emoji + " reaction!");
+      playSound("join");
+    });
+  });
+}
+
+async function startGame(gameType) {
+  const res = await fetch(CONFIG.SUPABASE_URL + "/functions/v1/start-game", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + CONFIG.SUPABASE_ANON_KEY
+    },
+    body: JSON.stringify({
+      roomId: appState.room.id,
+      gameType: gameType,
+      hostId: appState.player.id
+    })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Could not start game");
+  appState.room.status = "PLAYING";
+  appState.selectedGame = gameType;
+  appState.room.round_number = 1;
+}
+
+async function submitAnswer(answer) {
+  try {
+    const res = await fetch(CONFIG.SUPABASE_URL + "/functions/v1/submit-answer", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + CONFIG.SUPABASE_ANON_KEY
+      },
+      body: JSON.stringify({
+        roomId: appState.room.id,
+        playerId: appState.player.id,
+        roundNumber: appState.room.round_number || 1,
+        answer: answer
+      })
+    });
+    const data = await res.json();
+    return data;
+  } catch(e) {
+    return null;
+  }
+}
+
+function startTimer(seconds, onEnd) {
+  clearInterval(timerInterval);
+  let remaining = seconds;
+  const fill = document.getElementById("timerFill");
+  const text = document.getElementById("timerText");
+  fill.style.width = "100%";
+  text.textContent = remaining;
+  timerInterval = setInterval(function() {
+    remaining--;
+    text.textContent = remaining;
+    fill.style.width = ((remaining / seconds) * 100) + "%";
+    if (remaining <= 0) {
+      clearInterval(timerInterval);
+      if (onEnd) onEnd();
+    }
+  }, 1000);
+}
+
+function stopTimer() {
+  clearInterval(timerInterval);
+}
+
+function showGameScreen(gameTitle) {
+  document.getElementById("gameRoomCode").textContent = appState.room.code;
+  document.getElementById("gameRound").textContent = "ROUND " + (appState.room.round_number || 1) + "/" + (appState.room.total_rounds || 5);
+  document.getElementById("gameTitle").textContent = gameTitle;
+  document.getElementById("gameScore").textContent = appState.player.score || 0;
+  document.getElementById("answeredIndicator").textContent = "";
+  showScreen("game");
+}
+
+function renderMultipleChoice(options, onSelect) {
+  const area = document.getElementById("answerArea");
+  area.innerHTML = options.map(function(opt, i) {
+    return '<button class="answer-btn" data-index="' + i + '">' + opt + '</button>';
+  }).join("");
+  area.querySelectorAll(".answer-btn").forEach(function(btn) {
+    btn.addEventListener("click", function() {
+      area.querySelectorAll(".answer-btn").forEach(function(b) { b.classList.remove("selected"); });
+      btn.classList.add("selected");
+      onSelect(Number(btn.dataset.index));
+    });
+  });
+}
+
+function handleAnswer(selectedIndex, correctIndex) {
+  stopTimer();
+  const isCorrect = correctIndex === -1 ? true : selectedIndex === correctIndex;
+
+  document.querySelectorAll(".answer-btn").forEach(function(btn) {
+    btn.disabled = true;
+    if (correctIndex !== -1 && Number(btn.dataset.index) === correctIndex) {
+      btn.style.borderColor = "#22c55e";
+      btn.style.background = "#dcfce7";
+    }
+  });
+
+  submitAnswer({ selectedIndex: selectedIndex, isCorrect: isCorrect })
+    .then(function(result) {
+      if (result && result.pointsAwarded > 0) {
+        appState.player.score = (appState.player.score || 0) + result.pointsAwarded;
+        const me = appState.players.find(function(p) { return p.id === appState.player.id; });
+        if (me) me.score = appState.player.score;
+        document.getElementById("gameScore").textContent = appState.player.score;
+        showToast("Correct! +" + result.pointsAwarded);
+        playSound("correct");
+      } else {
+        showToast(isCorrect ? "Choice recorded!" : "Wrong answer");
+        if (!isCorrect) playSound("wrong");
+      }
+    });
+
+  setTimeout(function() {
+    showRoundResults(appState.players);
+  }, 1800);
+}
+
+function showRoundResults(players) {
+  const list = document.getElementById("roundLeaderboard");
+  const sorted = players.slice().sort(function(a, b) { return b.score - a.score; });
+  list.innerHTML = sorted.map(function(p, i) {
+    return '<div class="leaderboard-row">' +
+      '<div class="leaderboard-rank">' + (i + 1) + '</div>' +
+      '<div class="leaderboard-name">' + p.flag + ' ' + p.nickname + '</div>' +
+      '<div class="leaderboard-score">' + p.score + '</div>' +
+    '</div>';
+  }).join("");
+  showScreen("roundResults");
+}
+
+function showFinalResults(players) {
+  const sorted = players.slice().sort(function(a, b) { return b.score - a.score; });
+  const podium = document.getElementById("finalPodium");
+  const list = document.getElementById("finalLeaderboard");
+  podium.innerHTML = sorted.slice(0, 3).map(function(p, i) {
+    const medals = ["🥇", "🥈", "🥉"];
+    return '<div style="text-align:center;margin-bottom:.8rem;font-weight:700">' +
+      medals[i] + ' ' + p.flag + ' ' + p.nickname + ' — ' + p.score +
+    '</div>';
+  }).join("");
+  list.innerHTML = sorted.slice(3).map(function(p, i) {
+    return '<div class="leaderboard-row">' +
+      '<div class="leaderboard-rank">' + (i + 4) + '</div>' +
+      '<div class="leaderboard-name">' + p.flag + ' ' + p.nickname + '</div>' +
+      '<div class="leaderboard-score">' + p.score + '</div>' +
+    '</div>';
+  }).join("");
+  showScreen("finalResults");
+}
+
+async function fetchAIQuestion(gameType) {
+  try {
+    const res = await fetch(CONFIG.SUPABASE_URL + "/functions/v1/generate-content", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + CONFIG.SUPABASE_ANON_KEY
+      },
+      body: JSON.stringify({ gameType: gameType })
+    });
+    const data = await res.json();
+    if (!res.ok || data.fallback || !data.question) return null;
+    return {
+      question: data.question,
+      options: data.options,
+      correctIndex: data.correctIndex
+    };
+  } catch(e) {
+    return null;
+  }
+}
+
+async function runRound(title, fallbackQuestions, gameType, secondsOverride) {
+  showLoading(true);
+  answeredThisRound.clear();
+  try {
+    let q = null;
+    if (nextQuestionCache) {
+      q = nextQuestionCache;
+      nextQuestionCache = null;
+    }
+    if (!q) q = await fetchAIQuestion(gameType);
+    if (!q) q = fallbackQuestions[Math.floor(Math.random() * fallbackQuestions.length)];
+    currentQuestion = q;
+    showGameScreen(title);
+    document.getElementById("questionArea").textContent = q.question;
+    renderMultipleChoice(q.options, function(selectedIndex) {
+      handleAnswer(selectedIndex, q.correctIndex);
+    });
+    fetchAIQuestion(gameType).then(function(nextQ) {
+      if (nextQ) nextQuestionCache = nextQ;
+    });
+    const seconds = secondsOverride || appState.room.timer_seconds || 30;
+    startTimer(seconds, function() {
+      document.querySelectorAll(".answer-btn").forEach(function(btn) { btn.disabled = true; });
+      showToast("Time's up!");
+      setTimeout(function() { showRoundResults(appState.players); }, 1500);
+    });
+  } catch(err) {
+    showToast(err.message || "Could not load question");
+  } finally {
+    showLoading(false);
+  }
+}
+
+function startTriviaRound() { runRound("🧠 TRIVIA", FALLBACK_TRIVIA, "trivia"); }
+function startGuessCountryRound() { runRound("🌍 GUESS THE COUNTRY", FALLBACK_GUESS_COUNTRY, "guess-country"); }
+function startWouldYouRatherRound() { runRound("😂 WOULD YOU RATHER", FALLBACK_WOULD_YOU_RATHER, "would-you-rather"); }
+function startEmojiCharadesRound() { runRound("🎭 EMOJI CHARADES", FALLBACK_EMOJI_CHARADES, "emoji-charades"); }
+function startSpeedRound() { runRound("⚡ SPEED ROUND", FALLBACK_SPEED_ROUND, "speed-round", 15); }
+function startGuessSlangRound() { runRound("🗣️ GUESS THE SLANG", FALLBACK_GUESS_SLANG, "guess-slang"); }
+function startRandomChallengeRound() { runRound("🎲 RANDOM CHALLENGE", FALLBACK_RANDOM_CHALLENGE, "random-challenge"); }
+function startWhoAmIRound() { runRound("🕵️ WHO AM I?", FALLBACK_WHO_AM_I, "who-am-i"); }
+
+async function init() {
+  setupCountrySelector(DOM.createCountrySearch, DOM.createCountryDropdown, DOM.createCountryCode);
+  setupCountrySelector(DOM.joinCountrySearch, DOM.joinCountryDropdown, DOM.joinCountryCode);
+  initEvents();
+
+  const params = new URLSearchParams(window.location.search);
+  const roomParam = params.get("room");
+  if (roomParam) {
+    DOM.joinCode.value = roomParam.toUpperCase();
+  }
+
+  try {
+    const session = JSON.parse(localStorage.getItem("ggr_session") || "null");
+    if (session && session.roomCode && session.playerId) {
+      showLoading(true);
+      const supabase = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+      const { data: room } = await supabase.from("rooms").select("*").eq("code", session.roomCode).single();
+      if (room) {
+        const { data: player } = await supabase
+          .from("players")
+          .select("*")
+          .eq("id", session.playerId)
+          .eq("room_id", room.id)
+          .single();
+        if (player) {
+          appState.room = room;
+          appState.player = {
+            id: player.id,
+            nickname: player.nickname,
+            country: player.country,
+            countryCode: player.country_code,
+            flag: player.flag,
+            avatar: player.avatar,
+            isHost: player.is_host,
+            score: player.score || 0
+          };
+          await supabase.from("players").update({ connected: true }).eq("id", player.id);
+          await refreshPlayers();
+          enterLobby();
+          showToast("Reconnected to " + room.code);
+          showLoading(false);
+          return;
+        }
+      }
+      clearSession();
+    }
+  } catch(e) {
+    clearSession();
+  }
+  showLoading(false);
+}
+
+document.addEventListener("DOMContentLoaded", init);
+</script>
+</body>
+</html>
