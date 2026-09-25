@@ -538,6 +538,14 @@ function subscribeToRoom(roomCode) {
     }, function() {
       refreshPlayers();
     })
+    .on("postgres_changes", {
+      event: "UPDATE",
+      schema: "public",
+      table: "rooms",
+      filter: "id=eq." + appState.room.id
+    }, function(payload) {
+      handleRoomUpdate(payload.new);
+    })
     .subscribe(function(status) {
       if (status === "SUBSCRIBED") {
         DOM.connectionDot.classList.remove("offline");
@@ -547,6 +555,23 @@ function subscribeToRoom(roomCode) {
         DOM.connectionDot.title = "Connection issue";
       }
     });
+}
+
+function handleRoomUpdate(newRoom) {
+  if (!appState.room) return;
+  const wasPlaying = appState.room.status === "PLAYING";
+  appState.room.status = newRoom.status;
+  appState.room.selected_game = newRoom.selected_game;
+  appState.room.round_number = newRoom.round_number;
+  appState.room.total_rounds = newRoom.total_rounds;
+  appState.room.timer_seconds = newRoom.timer_seconds;
+
+  // Someone else (the host) just started a game and we're still sitting
+  // in the lobby / game-select screen: jump in.
+  if (newRoom.status === "PLAYING" && !wasPlaying && appState.screen !== "game") {
+    appState.selectedGame = newRoom.selected_game;
+    launchGame(newRoom.selected_game);
+  }
 }
 
 async function refreshPlayers() {
