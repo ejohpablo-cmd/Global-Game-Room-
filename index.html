@@ -201,6 +201,7 @@ button,input,select{font:inherit}button{cursor:pointer;border:none;background:no
 <button class="reaction-btn" data-emoji="💯">💯</button>
 </div>
 <button class="btn btn-primary mt-2" id="btnNextRound">NEXT ROUND</button>
+<p id="waitingForHostNextRound" class="text-center" style="display:none;color:#64748b;margin-top:.75rem">Waiting for host to continue…</p>
 <button class="btn btn-outline mt-1" id="btnBackToLobbyFromResults">Back to Lobby</button>
 </section>
 
@@ -403,6 +404,28 @@ const FALLBACK_WHO_AM_I = [
   {question:"I wrote Romeo and Juliet. Who am I?",options:["Charles Dickens","William Shakespeare","Mark Twain","Jane Austen"],correctIndex:1}
 ];
 
+const FALLBACK_QUESTIONS = {
+  "trivia": FALLBACK_TRIVIA,
+  "guess-country": FALLBACK_GUESS_COUNTRY,
+  "would-you-rather": FALLBACK_WOULD_YOU_RATHER,
+  "emoji-charades": FALLBACK_EMOJI_CHARADES,
+  "speed-round": FALLBACK_SPEED_ROUND,
+  "guess-slang": FALLBACK_GUESS_SLANG,
+  "random-challenge": FALLBACK_RANDOM_CHALLENGE,
+  "who-am-i": FALLBACK_WHO_AM_I
+};
+
+const GAME_TITLES = {
+  "trivia": "🧠 TRIVIA",
+  "guess-country": "🌍 GUESS THE COUNTRY",
+  "would-you-rather": "😂 WOULD YOU RATHER",
+  "emoji-charades": "🎭 EMOJI CHARADES",
+  "speed-round": "⚡ SPEED ROUND",
+  "guess-slang": "🗣️ GUESS THE SLANG",
+  "random-challenge": "🎲 RANDOM CHALLENGE",
+  "who-am-i": "🕵️ WHO AM I?"
+};
+
 function randomEmoji() {
   const e = ["😎","🔥","🚀","🎯","🌟","🦊","🐼","🦄","🐱","🐶","🐸","🦁","🐯","🐻","🐨","🐵","🐔","🐧","🐢","🦖","🎮","🎲","🧩","🎸","🎧","🍕","🍔","🍩","⚡","🌈","👻","🤖","👽","🎃","👑","💎","🍀","🌊"];
   return e[Math.floor(Math.random() * e.length)];
@@ -559,18 +582,29 @@ function subscribeToRoom(roomCode) {
 
 function handleRoomUpdate(newRoom) {
   if (!appState.room) return;
-  const wasPlaying = appState.room.status === "PLAYING";
+
+  const prevQuestionKey = appState.room.current_question ? JSON.stringify(appState.room.current_question) : null;
+  const newQuestionKey = newRoom.current_question ? JSON.stringify(newRoom.current_question) : null;
+  const questionChanged = newQuestionKey && newQuestionKey !== prevQuestionKey;
+
   appState.room.status = newRoom.status;
   appState.room.selected_game = newRoom.selected_game;
   appState.room.round_number = newRoom.round_number;
   appState.room.total_rounds = newRoom.total_rounds;
   appState.room.timer_seconds = newRoom.timer_seconds;
+  appState.room.current_question = newRoom.current_question;
+  appState.room.current_round_started_at = newRoom.current_round_started_at;
+  appState.selectedGame = newRoom.selected_game;
 
-  // Someone else (the host) just started a game and we're still sitting
-  // in the lobby / game-select screen: jump in.
-  if (newRoom.status === "PLAYING" && !wasPlaying && appState.screen !== "game") {
-    appState.selectedGame = newRoom.selected_game;
-    launchGame(newRoom.selected_game);
+  if (newRoom.status === "FINISHED") {
+    refreshPlayers().then(function() { showFinalResults(appState.players); });
+    return;
+  }
+
+  // The host (or the server) just made a new question live for this round -
+  // every client, including the host's own browser, renders it the same way.
+  if (newRoom.status === "PLAYING" && questionChanged) {
+    presentQuestion(appState.room);
   }
 }
 
@@ -764,7 +798,9 @@ function renderGameSelection() {
       showLoading(true);
       try {
         await startGame(gameId);
-        launchGame(gameId);
+        // Don't render anything here - the rooms-table realtime subscription
+        // will deliver the server-picked question to this browser exactly
+        // the same way it does for every other player, host included.
       } catch(err) {
         showToast(err.message || "Could not start game");
         card.classList.remove("selected");
@@ -773,23 +809,6 @@ function renderGameSelection() {
       }
     });
   });
-}
-
-function launchGame(gameId) {
-  nextQuestionCache = null;
-  answeredThisRound.clear();
-  if (gameId === "trivia") startTriviaRound();
-  else if (gameId === "guess-country") startGuessCountryRound();
-  else if (gameId === "would-you-rather") startWouldYouRatherRound();
-  else if (gameId === "emoji-charades") startEmojiCharadesRound();
-  else if (gameId === "speed-round") startSpeedRound();
-  else if (gameId === "guess-slang") startGuessSlangRound();
-  else if (gameId === "random-challenge") startRandomChallengeRound();
-  else if (gameId === "who-am-i") startWhoAmIRound();
-  else {
-    showToast("This game is coming soon!");
-    showScreen("lobby");
-  }
 }
 
 function initEvents() {
@@ -890,12 +909,31 @@ function initEvents() {
   });
 
   document.getElementById("btnNextRound").addEventListener("click", async function() {
-    appState.room.round_number = (appState.room.round_number || 1) + 1;
-    if (appState.room.round_number > (appState.room.total_rounds || 5)) {
-      showFinalResults(appState.players);
-      return;
+    if (!appState.player.isHost) return;
+    const btn = this;
+    btn.disabled = true;
+    try {
+      const res = await fetch(CONFIG.SUPABASE_URL + "/functions/v1/next-round", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + CONFIG.SUPABASE_ANON_KEY
+        },
+        body: JSON.stringify({
+          roomId: appState.room.id,
+          hostId: appState.player.id,
+          fallbackQuestions: FALLBACK_QUESTIONS[appState.selectedGame] || []
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not advance round");
+      // The room-table realtime subscription drives the actual screen
+      // transition for every player, including this host.
+    } catch (err) {
+      showToast(err.message || "Could not advance round");
+    } finally {
+      btn.disabled = false;
     }
-    launchGame(appState.selectedGame);
   });
 
   document.getElementById("btnBackToLobbyFromResults").addEventListener("click", function() {
@@ -956,14 +994,12 @@ async function startGame(gameType) {
     body: JSON.stringify({
       roomId: appState.room.id,
       gameType: gameType,
-      hostId: appState.player.id
+      hostId: appState.player.id,
+      fallbackQuestions: FALLBACK_QUESTIONS[gameType] || []
     })
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || "Could not start game");
-  appState.room.status = "PLAYING";
-  appState.selectedGame = gameType;
-  appState.room.round_number = 1;
 }
 
 async function submitAnswer(answer) {
@@ -978,7 +1014,7 @@ async function submitAnswer(answer) {
         roomId: appState.room.id,
         playerId: appState.player.id,
         roundNumber: appState.room.round_number || 1,
-        answer: answer
+        selectedIndex: answer.selectedIndex
       })
     });
     const data = await res.json();
@@ -1033,36 +1069,39 @@ function renderMultipleChoice(options, onSelect) {
   });
 }
 
-function handleAnswer(selectedIndex, correctIndex) {
+function handleAnswer(selectedIndex) {
   stopTimer();
-  const isCorrect = correctIndex === -1 ? true : selectedIndex === correctIndex;
+  document.querySelectorAll(".answer-btn").forEach(function(btn) { btn.disabled = true; });
 
-  document.querySelectorAll(".answer-btn").forEach(function(btn) {
-    btn.disabled = true;
-    if (correctIndex !== -1 && Number(btn.dataset.index) === correctIndex) {
-      btn.style.borderColor = "#22c55e";
-      btn.style.background = "#dcfce7";
-    }
-  });
-
-  submitAnswer({ selectedIndex: selectedIndex, isCorrect: isCorrect })
+  submitAnswer({ selectedIndex: selectedIndex })
     .then(function(result) {
+      const correctIndex = result && typeof result.correctIndex === "number" ? result.correctIndex : -1;
+      document.querySelectorAll(".answer-btn").forEach(function(btn) {
+        if (correctIndex !== -1 && Number(btn.dataset.index) === correctIndex) {
+          btn.style.borderColor = "#22c55e";
+          btn.style.background = "#dcfce7";
+        }
+      });
+
       if (result && result.pointsAwarded > 0) {
-        appState.player.score = (appState.player.score || 0) + result.pointsAwarded;
+        appState.player.score = result.newScore;
         const me = appState.players.find(function(p) { return p.id === appState.player.id; });
         if (me) me.score = appState.player.score;
         document.getElementById("gameScore").textContent = appState.player.score;
         showToast("Correct! +" + result.pointsAwarded);
         playSound("correct");
       } else {
-        showToast(isCorrect ? "Choice recorded!" : "Wrong answer");
-        if (!isCorrect) playSound("wrong");
+        showToast(result && result.correct ? "Choice recorded!" : "Wrong answer");
+        if (!(result && result.correct)) playSound("wrong");
       }
-    });
 
-  setTimeout(function() {
-    showRoundResults(appState.players);
-  }, 1800);
+      setTimeout(function() {
+        refreshPlayers().then(function() { showRoundResults(appState.players); });
+      }, 1800);
+    })
+    .catch(function() {
+      setTimeout(function() { showRoundResults(appState.players); }, 1800);
+    });
 }
 
 function showRoundResults(players) {
@@ -1075,6 +1114,9 @@ function showRoundResults(players) {
       '<div class="leaderboard-score">' + p.score + '</div>' +
     '</div>';
   }).join("");
+  const isHost = !!(appState.player && appState.player.isHost);
+  document.getElementById("btnNextRound").style.display = isHost ? "block" : "none";
+  document.getElementById("waitingForHostNextRound").style.display = isHost ? "none" : "block";
   showScreen("roundResults");
 }
 
@@ -1098,69 +1140,33 @@ function showFinalResults(players) {
   showScreen("finalResults");
 }
 
-async function fetchAIQuestion(gameType) {
-  try {
-    const res = await fetch(CONFIG.SUPABASE_URL + "/functions/v1/generate-content", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer " + CONFIG.SUPABASE_ANON_KEY
-      },
-      body: JSON.stringify({ gameType: gameType })
-    });
-    const data = await res.json();
-    if (!res.ok || data.fallback || !data.question) return null;
-    return {
-      question: data.question,
-      options: data.options,
-      correctIndex: data.correctIndex
-    };
-  } catch(e) {
-    return null;
-  }
-}
-
-async function runRound(title, fallbackQuestions, gameType, secondsOverride) {
-  showLoading(true);
+function presentQuestion(room) {
   answeredThisRound.clear();
-  try {
-    let q = null;
-    if (nextQuestionCache) {
-      q = nextQuestionCache;
-      nextQuestionCache = null;
-    }
-    if (!q) q = await fetchAIQuestion(gameType);
-    if (!q) q = fallbackQuestions[Math.floor(Math.random() * fallbackQuestions.length)];
-    currentQuestion = q;
-    showGameScreen(title);
-    document.getElementById("questionArea").textContent = q.question;
-    renderMultipleChoice(q.options, function(selectedIndex) {
-      handleAnswer(selectedIndex, q.correctIndex);
-    });
-    fetchAIQuestion(gameType).then(function(nextQ) {
-      if (nextQ) nextQuestionCache = nextQ;
-    });
-    const seconds = secondsOverride || appState.room.timer_seconds || 30;
-    startTimer(seconds, function() {
-      document.querySelectorAll(".answer-btn").forEach(function(btn) { btn.disabled = true; });
-      showToast("Time's up!");
-      setTimeout(function() { showRoundResults(appState.players); }, 1500);
-    });
-  } catch(err) {
-    showToast(err.message || "Could not load question");
-  } finally {
-    showLoading(false);
-  }
-}
+  const q = room.current_question;
+  if (!q) return;
+  currentQuestion = q;
+  showGameScreen(GAME_TITLES[room.selected_game] || room.selected_game);
+  document.getElementById("questionArea").textContent = q.question;
+  renderMultipleChoice(q.options, function(selectedIndex) {
+    handleAnswer(selectedIndex);
+  });
 
-function startTriviaRound() { runRound("🧠 TRIVIA", FALLBACK_TRIVIA, "trivia"); }
-function startGuessCountryRound() { runRound("🌍 GUESS THE COUNTRY", FALLBACK_GUESS_COUNTRY, "guess-country"); }
-function startWouldYouRatherRound() { runRound("😂 WOULD YOU RATHER", FALLBACK_WOULD_YOU_RATHER, "would-you-rather"); }
-function startEmojiCharadesRound() { runRound("🎭 EMOJI CHARADES", FALLBACK_EMOJI_CHARADES, "emoji-charades"); }
-function startSpeedRound() { runRound("⚡ SPEED ROUND", FALLBACK_SPEED_ROUND, "speed-round", 15); }
-function startGuessSlangRound() { runRound("🗣️ GUESS THE SLANG", FALLBACK_GUESS_SLANG, "guess-slang"); }
-function startRandomChallengeRound() { runRound("🎲 RANDOM CHALLENGE", FALLBACK_RANDOM_CHALLENGE, "random-challenge"); }
-function startWhoAmIRound() { runRound("🕵️ WHO AM I?", FALLBACK_WHO_AM_I, "who-am-i"); }
+  // Base the countdown on when the server actually started the round so
+  // every player's timer is synced, even if their update arrived a beat late.
+  const totalSeconds = room.timer_seconds || 30;
+  let secondsLeft = totalSeconds;
+  if (room.current_round_started_at) {
+    const elapsed = (Date.now() - new Date(room.current_round_started_at).getTime()) / 1000;
+    secondsLeft = Math.max(1, Math.round(totalSeconds - elapsed));
+  }
+  startTimer(secondsLeft, function() {
+    document.querySelectorAll(".answer-btn").forEach(function(btn) { btn.disabled = true; });
+    showToast("Time's up!");
+    setTimeout(function() {
+      refreshPlayers().then(function() { showRoundResults(appState.players); });
+    }, 1500);
+  });
+}
 
 async function init() {
   setupCountrySelector(DOM.createCountrySearch, DOM.createCountryDropdown, DOM.createCountryCode);
